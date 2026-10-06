@@ -7,7 +7,7 @@ import { useUI } from '../store/useUI.js'
 import { ACCENTS, localTZ, weekStartOf, MONDAY, SUNDAY } from '../lib/format.js'
 import { effortOf } from '../lib/history.js'
 import { unlock, playOnSilentSupported } from '../lib/sound.js'
-import { IS_ANDROID } from '../lib/api.js'
+import { IS_ANDROID, logout as apiLogout } from '../lib/api.js'
 import { pushSupported, enablePush, disablePush, sendTestPush, syncPushSubscription } from '../lib/push.js'
 import { wakeLockSupported } from '../lib/wakelock.js'
 import { t, LANGS, INSTR_LANGS } from '../lib/i18n.js'
@@ -75,11 +75,6 @@ export default function Settings() {
           options={[{ value: MONDAY, label: t('Monday') }, { value: SUNDAY, label: t('Sunday') }]}
           value={weekStartOf(S)} onChange={v => update(s => { s.weekStart = v })} />
       </Row>
-      {/* Membership QR codes on Home (views/CheckIn.jsx); off = no Home card, no route. */}
-      <Row icon="qr" iconTint="var(--blue)" title={t('Gym check-in')}
-        subtitle={t('Show a card on Home with your membership QR codes.')}>
-        <Switch checked={S.checkIn !== false} onChange={v => update(s => { s.checkIn = v })} />
-      </Row>
     </Section>
 
     {/* ---------- during a workout ---------- */}
@@ -105,15 +100,6 @@ export default function Settings() {
       <Row icon="wrench" iconTint="var(--purple)" title={t('Workout controls')} accessory="chevron"
         subtitle={t('Everything hidden here stays one tap away: the ⋯ button of an exercise and the number of a set.')}
         onClick={() => workoutControlsSheet()} />
-      <SelectRow icon="timer" iconTint="var(--orange)" title={t('Rest timer')}
-        value={S.restSec} onChange={v => update(s => { s.restSec = v })}
-        options={[{ value: 0, label: t('Off') }, ...[60, 90, 120, 150, 180].map(v => ({ value: v, label: v + 's' }))]} />
-      {/* Default for a rest-pause burst added live on a plain set — a planned exercise's own
-          "Rest (s)" (in its Intensifier config) overrides this, same as the main rest timer
-          is the fallback whenever an exercise has no progression rule of its own. */}
-      <SelectRow icon="bolt" iconTint="var(--acc)" title={t('Rest-pause rest')}
-        value={S.restPauseSec} onChange={v => update(s => { s.restPauseSec = v })}
-        options={[10, 15, 20, 30].map(v => ({ value: v, label: v + 's' }))} />
       {(wakeOK || !MOBILE) && (
         <Row icon="sun" iconTint="var(--yellow)" title={t('Keep screen awake')}
           subtitle={wakeOK ? null : t('Not supported in this browser.')}>
@@ -144,9 +130,6 @@ export default function Settings() {
           <Switch checked={!!S.soundOnSilent} onChange={v => update(s => { s.soundOnSilent = v })} />
         </Row>
       )}
-      <Row icon="sun" iconTint="var(--yellow)" title={t('Flash screen when timer ends')}>
-        <Switch checked={!!S.timerFlash} onChange={v => update(s => { s.timerFlash = v })} />
-      </Row>
       {/* Two names for the same judgement, so the column asks in the scale you already think in.
           The (i) sits before the control — you read it on the way to the choice, not after it. */}
       <Row icon="target" iconTint="var(--purple)" title={t('Effort per set')}>
@@ -196,6 +179,17 @@ export default function Settings() {
       </div>
     </Section>
 
+
+    {/* ---------- account ---------- */}
+    {user && <Section title={t('Account')}>
+      <Row icon="personCircle" iconTint="var(--grey)" title={user.name} subtitle={user.email || t('Signed in')} />
+      <Row icon="signOut" iconTint="var(--red)" title={t('Logout')} danger onClick={() => confirmSheet({
+        title: t('Logout?'),
+        message: t('You will need to sign in again to access your data.'),
+        confirmText: t('Logout'), danger: true,
+        onConfirm: () => { apiLogout(); useStore.getState().setUser(null); nav('/home'); window.location.reload() },
+      })} />
+    </Section>}
 
     {/* The version, at the bottom of Settings — which is where the support template has been
         telling people to look for it, and where it was not. On the phone build there is no

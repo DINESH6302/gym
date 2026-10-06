@@ -4,7 +4,7 @@ import { bestWeightForEntry } from './history.js'
 import { hasCompletedWork } from './workout-model.js'
 
 export function buildCompletedWorkout(active, { end = Date.now(), prs = [], snapshotFor } = {}) {
-  const entries = (active?.entries || []).map(entry => {
+  const entries = (active?.entries || []).filter(e => !e.skipped).map(entry => {
     const completed = {
       id: entry.id,
       sets: entry.sets,

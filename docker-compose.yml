@@ -32,31 +32,19 @@ services:
         fi
     restart: "no"
 
-  # Passkey auth + per-user data (Node, no framework).
-  # image: prebuilt (docker compose pull). build: from source (docker compose up --build).
+  # Spring Boot API — user auth + SQLite state storage.
   api:
-    image: ghcr.io/duartesantos8/opengym-api:latest
-    # Default target: no AI runtime, no AI dependency — the image every instance has always had.
-    # To opt into the AI Coach, build the other target instead:
-    #     API_TARGET=coach docker compose up --build api
-    # `--build` matters: with an `image:` also set, compose would otherwise pull the prebuilt
-    # default rather than build the coach one.
     build:
-      context: ./api
-      target: ${API_TARGET:-default}
+      context: ./backend
     restart: unless-stopped
     env_file: .env
     environment:
-      # The port the API listens on. web proxies to this same value, so the two
-      # cannot drift — change it in .env and both follow.
-      - PORT=${PORT:-3000}
-      - DATA_DIR=/data
+      - SERVER_PORT=${PORT:-3000}
+      - SPRING_DATASOURCE_URL=jdbc:sqlite:/data/opengym.db
+      - OPENGYM_DATA_DIR=/data
+      - OPENGYM_ALLOW_GUEST=${ALLOW_GUEST:-true}
     volumes:
-      - ./data:/data         # users, passkeys, per-user state, session secret — BACK THIS UP
-      # Provider credential cache (Codex). A sibling of ./data on purpose: the documented backup
-      # is `tar czf … data/`, and a live refresh token must not end up inside it. Nothing here
-      # needs backing up — if you lose it, sign the provider in again.
-      - ./coach-auth:/coach-auth
+      - ./data:/data
 
   # Builds the React frontend (multi-stage) and serves it, proxying /api → api
   # and the exercise media from the shared volume. Single origin for passkeys.

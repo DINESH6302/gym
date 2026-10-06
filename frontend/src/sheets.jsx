@@ -2221,8 +2221,17 @@ function doFinishWorkout() {
     }
     s.active = null
   })
-  useStore.getState().autoBackupNow()
-  useUI.getState().stopRest()
+  // Persist the completed workout to the backend
+  import('./lib/api-client.js').then(AC => AC.saveWorkout(w).catch(e => console.warn('workout save failed:', e)))
+  // Update exercise weights on the backend
+  if (!past) {
+    import('./lib/api-client.js').then(AC => {
+      w.entries.forEach(e => {
+        const mx = bestWeightForEntry(e)
+        if (mx > 0) AC.setExerciseWeight(e.id, mx).catch(() => {})
+      })
+    })
+  }
   beep(snd(), 880, 0.15); beep(snd(), 1100, 0.15, 0.18); beep(snd(), 1320, 0.3, 0.36)
   ui().openSheet(close => <FinishSummary w={w} prs={prs} e1prs={e1prs} close={close} />, { kind: 'center', locked: true })
 }

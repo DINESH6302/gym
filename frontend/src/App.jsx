@@ -20,10 +20,8 @@ import ErrorBoundary from './components/ErrorBoundary.jsx'
 import Modals from './components/Modals.jsx'
 import Toast from './components/Toast.jsx'
 import SyncBanner from './components/SyncBanner.jsx'
-import RestTimer from './components/RestTimer.jsx'
-import TimerFlash from './components/TimerFlash.jsx'
+import Login from './views/Login.jsx'
 import Home from './views/Home.jsx'
-import CheckIn from './views/CheckIn.jsx'
 import Plan from './views/Plan.jsx'
 import RoutineEdit from './views/RoutineEdit.jsx'
 import Workout from './views/Workout.jsx'
@@ -33,9 +31,6 @@ import Library from './views/Library.jsx'
 import Muscles from './views/Muscles.jsx'
 import Settings from './views/Settings.jsx'
 import Admin from './views/Admin.jsx'
-import CoachChat from './views/CoachChat.jsx'
-import CoachIntake from './views/CoachIntake.jsx'
-import CoachSetup from './views/CoachSetup.jsx'
 
 // last known scrollY per route, so back-navigation can put the page where it was
 const scrollPositions = new Map()
@@ -63,7 +58,6 @@ function Shell() {
   // iOS: whether timer sounds get past the ring/silent switch (Settings → Sounds). Page-level,
   // so it is applied here on load and on change rather than at each beep.
   useEffect(() => { setPlayOnSilent(!!S.soundOnSilent) }, [S.soundOnSilent])
-  const isGuest = useStore(s => s.isGuest())
   const langV = useLang()   // re-renders the whole shell when the language (pack) changes
   useEffect(() => { setNav(navigate) }, [navigate])
   useEffect(() => { applyPrefs(S.theme, S.accent) }, [S.theme, S.accent])
@@ -125,7 +119,7 @@ function Shell() {
   // bound to the workout, not to the route — checking Stats mid-session keeps the screen on
   useWakeLock(!!S.active && S.keepAwake !== false)
 
-  const authed = user || isGuest
+  const authed = !!user
   if (!ready && !authed) return (
     <div id="app">
       <div style={{ paddingTop: '44vh', display: 'flex', justifyContent: 'center', fontSize: 34, color: 'var(--label-3)' }}>
@@ -140,12 +134,10 @@ function Shell() {
           re-mounts the boundary, so the tab bar is always a way out */}
       <div id="app" className="vfade" key={loc.pathname}>
         <ErrorBoundary>
-          <SyncBanner />
+          {authed && <SyncBanner />}
+          {!authed ? <Login /> : (
             <Routes>
               <Route path="/home" element={<Home />} />
-              {/* Gym check-in — switched off in Settings, the route falls through to the
-                  catch-all redirect below. */}
-              {S.checkIn !== false && <Route path="/checkin" element={<CheckIn />} />}
               <Route path="/plan" element={<Plan />} />
               <Route path="/plan/r/:id" element={<RoutineEdit />} />
               <Route path="/workout" element={<Workout />} />
@@ -154,24 +146,16 @@ function Shell() {
               <Route path="/library" element={<Library />} />
               <Route path="/muscles" element={<Muscles />} />
               <Route path="/settings" element={<Settings />} />
-              {/* The Coach screens gate themselves on the instance config; the routes exist
-                  unconditionally so a deep link from a notification lands somewhere sane
-                  rather than on the catch-all. */}
-              <Route path="/coach" element={<CoachChat />} />
-              <Route path="/coach/intake" element={<CoachIntake />} />
-              <Route path="/coach/proposal" element={<Navigate to="/coach" replace />} />
-              <Route path="/coach/setup" element={<CoachSetup />} />
               <Route path="/admin" element={user?.admin ? <Admin /> : <Navigate to="/home" replace />} />
               <Route path="*" element={<Navigate to="/home" replace />} />
             </Routes>
+          )}
         </ErrorBoundary>
       </div>
       {/* The chat owns the bottom of the screen: its composer sits where the tabs would be. */}
-      {loc.pathname !== '/coach' && <TabBar onStart={startFlow} />}
-      <RestTimer />
+      <TabBar onStart={startFlow} />
       <Modals />
       <Toast />
-      <TimerFlash />
     </>
   )
 }

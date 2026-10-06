@@ -5,7 +5,7 @@ import { workoutControls } from '../lib/workout-controls.js'
 import { useUI } from '../store/useUI.js'
 import { exOr, betterWeight } from '../lib/exercises.js'
 import { usesBar, barWeightFor, plateSplit } from '../lib/bar.js'
-import { effectiveRoutines, effectiveRoutineIds, lastEntryFor, bestWeightFor, bestWeightForEntry, buildSets, freestyleConfig, defaultConfig, setsDoneActive, setUnitsTotal, supersetUnits, unitOf, setLabel, modeOf, isBw, isPerSide, repStep, EFFORT, effortOf, stepEffort, capEffort, cascadeWeight, insertWarmupRow, removeRowAt, pairAdjacent, unpairSuperset, cleanupSg, applyIntensifierPlan, pinnedNoteFor, exNoteFor } from '../lib/history.js'
+import { effectiveRoutines, effectiveRoutineIds, lastEntryFor, bestWeightFor, bestWeightForEntry, buildSets, freestyleConfig, defaultConfig, setsDoneActive, setUnitsTotal, supersetUnits, unitOf, setLabel, modeOf, isBw, isPerSide, repStep, EFFORT, effortOf, stepEffort, capEffort, cascadeWeight, removeRowAt, pairAdjacent, unpairSuperset, cleanupSg, applyIntensifierPlan, pinnedNoteFor, exNoteFor } from '../lib/history.js'
 import { fmtNum, capWords, fmtDate, todayISO, exCount, DAYN } from '../lib/format.js'
 import { beep, vibrate, unlock } from '../lib/sound.js'
 import { t, exerciseNameFor } from '../lib/i18n.js'
@@ -19,7 +19,7 @@ import { Button, Check, NumberField } from '../components/ui.jsx'
 import { nextPrescription, applyPrescription, defaultIncrement, weightIncrement, stepWeight } from '../lib/progression.js'
 import { progressionGuidance } from '../lib/progression-copy.js'
 import { glyphOf } from '../lib/glyphs.js'
-import { isWarmupRow, isDropSet, isRestPauseSet, dropsOf, clustersOf, addDrop, addCluster, removeDropAt, removeClusterAt, setDropAt, setClusterAt, nextDropWeight, nextBurstReps, isSideSet, makeSideSet, setSideField, toggleSide, addSideDrop, removeSideDropAt, setSideDropAt, addSideCluster, removeSideClusterAt, setSideClusterAt } from '../lib/workout-model.js'
+import { isWarmupRow, isSideSet, makeSideSet, setSideField, toggleSide } from '../lib/workout-model.js'
 import { canMoveActiveWorkoutUnit, moveActiveWorkoutUnit } from '../lib/active-workout-order.js'
 import { MUSCLE_NAME } from '../lib/muscles.js'
 
@@ -73,57 +73,14 @@ function Elapsed({ start }) {
 // drops everything that is not a set you are logging — media, tag chips, the note lines, the
 // "last time" recap and the progression line — leaving the name, the ⋯ menu and the sets.
 // Nothing dropped is lost: it is all still on the ⋯ menu, or one ⋮ switch back to list/cards.
-function ExerciseBlock({ entryIdx, compact, dense, onToggle, onToggleSide, onField, onAddSet, onRemoveSet, onAddWarmup, onRemoveSetAt, onStartTimed, onPairPrev, onPairNext, onSetRowRef, onProgressionSettings, onSwap, onMoveUp, onMoveDown, canMoveUp, canMoveDown, onRemoveExercise, busy }) {
+function ExerciseBlock({ entryIdx, compact, dense, onToggle, onToggleSide, onField, onAddSet, onRemoveSet, onRemoveSetAt, onStartTimed, onPairPrev, onPairNext, onSetRowRef, onProgressionSettings, onSwap, onMoveUp, onMoveDown, canMoveUp, canMoveDown, onRemoveExercise, busy }) {
   const S = useStore(s => s.S)
   const update = useStore(s => s.update)
   const working = useUI(s => s.work)
   const entry = S.active.entries[entryIdx]
-  // Drops/bursts mutate the row in place — same card, not a new set with its own long rest.
-  // A planned exercise (see the exercise's "Intensifier" config) arrives with these already
-  // filled in by applyIntensifierPlan; these only add/edit/remove entries live from here on.
   const mutSet = (i, fn) => update(s => { const row = s.active.entries[entryIdx].sets[i]; s.active.entries[entryIdx].sets[i] = fn(row) }, true)
-  const addDropRow = i => mutSet(i, row => {
-    // A unilateral set drops per side (issue #60): addSideDrop seeds each side from its own weight.
-    if (isSideSet(row)) {
-      const pct = entry.target?.intensifier?.type === 'dropset' ? entry.target.intensifier.pct : undefined
-      return addSideDrop(row, pct)
-    }
-    const drops = dropsOf(row)
-    const base = drops.length ? drops[drops.length - 1].w : (row.w || 0)
-    const pct = entry.target?.intensifier?.type === 'dropset' ? entry.target.intensifier.pct : undefined
-    return addDrop(row, { w: nextDropWeight(base, pct), r: row.r })
-  })
-  // A rest-pause row's own reps are always the total across every burst (see
-  // applyIntensifierPlan/history.js) — clusters are the breakdown of that total, not extra on
-  // top of it — so adding, removing or editing one keeps `r` in step by the same delta.
-  const addBurstRow = i => mutSet(i, row => {
-    const restSec = entry.target?.intensifier?.type === 'restpause' ? entry.target.intensifier.restSec : (S.restPauseSec || 15)
-    if (isSideSet(row)) return addSideCluster(row, restSec)   // per side, each keeps its own r in step
-    const clusters = clustersOf(row)
-    const base = clusters.length ? clusters[clusters.length - 1].r : (row.r || 0)
-    const added = nextBurstReps(base)
-    return { ...addCluster(row, { r: added, restSec }), r: (row.r || 0) + added }
-  })
-  // Per-side weight/reps/effort edits (issue #60): patch one side of a unilateral row, keeping
-  // the row's aggregate (r/w/done/effort) in step via the model helper so every other reader
-  // stays right. The done tick goes through onToggleSide → toggle() instead, so ticking a side
-  // still fires the rest timer / auto-advance / workout-complete flow.
+  // Per-side weight/reps/effort edits (issue #60)
   const setSide = (i, side, field, v) => mutSet(i, row => setSideField(row, side, field, v))
-  // Drop/burst edits accept an optional `side` ('L'|'R'): present for a per-side row (edits that
-  // one limb's drop/burst), absent for a straight row (edits the row's own).
-  const removeDrop = (i, di) => mutSet(i, row => isSideSet(row) ? removeSideDropAt(row, di) : removeDropAt(row, di))
-  const removeCluster = (i, ci) => mutSet(i, row => {
-    if (isSideSet(row)) return removeSideClusterAt(row, ci)
-    const removed = clustersOf(row)[ci]?.r || 0
-    return { ...removeClusterAt(row, ci), r: Math.max(0, (row.r || 0) - removed) }
-  })
-  const setDropField = (i, di, field, v, side) => mutSet(i, row =>
-    isSideSet(row) ? setSideDropAt(row, side, di, { [field]: v }) : setDropAt(row, di, { [field]: v }))
-  const setClusterField = (i, ci, v, side) => mutSet(i, row => {
-    if (isSideSet(row)) return setSideClusterAt(row, side, ci, v)
-    const delta = (Number(v) || 0) - (clustersOf(row)[ci]?.r || 0)
-    return { ...setClusterAt(row, ci, { r: v }), r: Math.max(0, (row.r || 0) + delta) }
-  })
   const ex = exOr(entry.id)
   const mode = modeOf({ ...(entry.target || {}), id: entry.id })
   const cardio = mode === 'cardio'
@@ -214,6 +171,11 @@ function ExerciseBlock({ entryIdx, compact, dense, onToggle, onToggleSide, onFie
     if (bar === 0) return perSide ? { bar, text: perSide } : null
     return { bar, text: t('Bar {0}', fmtNum(bar) + ' ' + S.unit) + (perSide ? ' · ' + perSide : '') }
   })() : null
+  const skipExercise = () => update(s => {
+    const e = s.active.entries[entryIdx]
+    e.skipped = !e.skipped
+    if (e.skipped) e.sets.forEach(set => { set.done = false; if (set.sides) Object.values(set.sides).forEach(sd => { sd.done = false }) })
+  }, true)
   const openMore = () => menuSheet({
     title: exerciseNameFor(ex),
     items: [
@@ -222,12 +184,12 @@ function ExerciseBlock({ entryIdx, compact, dense, onToggle, onToggleSide, onFie
       { icon: 'history', label: t('History'), sub: last ? t('Last time') + ' ' + fmtDate(last.d) : undefined, onClick: () => exerciseHistorySheet(entry.id) },
       onProgressionSettings && { icon: 'chartLine', label: t('Progression settings'), sub: guidance ? t(guidance.policyLabel) : undefined, onClick: onProgressionSettings },
       barInfo && { icon: 'barbell', label: t('Bar weight'), sub: barInfo.text, onClick: () => barWeightSheet(entry.id) },
-      { icon: 'flame', label: t('Add warm-up set'), onClick: onAddWarmup },
       onPairPrev && { icon: 'link', label: t('Make superset with previous'), onClick: onPairPrev },
       onPairNext && { icon: 'link', label: t('Make superset with next'), onClick: onPairNext },
       onSwap && { icon: 'shuffle', label: t('Swap exercise'), onClick: onSwap, disabled: busy },
       onMoveUp && { icon: 'chevronUp', label: t('Move up'), onClick: onMoveUp, disabled: busy || !canMoveUp },
       onMoveDown && { icon: 'chevronDown', label: t('Move down'), onClick: onMoveDown, disabled: busy || !canMoveDown },
+      { icon: 'xmark', label: entry.skipped ? t('Unskip exercise') : t('Skip exercise'), onClick: skipExercise },
       onRemoveExercise && { icon: 'trash', label: t('Remove exercise'), onClick: onRemoveExercise, danger: true, disabled: busy },
     ],
   })
@@ -239,8 +201,6 @@ function ExerciseBlock({ entryIdx, compact, dense, onToggle, onToggleSide, onFie
       title: (warm ? t('Warm-up') : t('Set {0}', entry.sets.slice(0, i + 1).filter(x => isWarmupRow(x) === warm).length)),
       subtitle: setLabel(entry.id, s, entry.target),
       items: [
-        !warm && mode === 'reps' && !isRestPauseSet(s) && { icon: 'arrowDown', label: t('Drop set'), sub: t('+ Drop'), onClick: () => addDropRow(i) },
-        !warm && mode === 'reps' && !isDropSet(s) && { icon: 'bolt', label: t('Rest-pause burst'), sub: t('+ Burst'), onClick: () => addBurstRow(i) },
         { icon: 'trash', label: t('Remove this set'), danger: true, disabled: entry.sets.length <= 1, onClick: () => onRemoveSetAt(i) },
       ],
     })
@@ -335,41 +295,21 @@ function ExerciseBlock({ entryIdx, compact, dense, onToggle, onToggleSide, onFie
   // A side's own drop-set/rest-pause sub-rows (issue #60): the intensifier is logged per limb, so
   // the drops and bursts hang under that side's row, each editable, exactly like a straight set's
   // do under its row. Reads the side object, not the aggregate.
-  const sideExtras = (s, i, side) => {
-    const sd = (s.sides && s.sides[side]) || {}
-    return <>
-      {dropsOf(sd).map((d, di) => (
-        <div className="subrow" key={'d' + di}>
-          <span className="subn">{t('Drop {0}', di + 1)}</span>
-          {miniStepper(d.w, loadStep, true, v => setDropField(i, di, 'w', v, side), true)}
-          {miniStepper(d.r, 1, false, v => setDropField(i, di, 'r', v, side))}
-          <button className="iconbtn" aria-label={t('Remove drop')} onClick={() => removeDrop(i, di)}><Icon name="xmark" /></button>
-        </div>
-      ))}
-      {clustersOf(sd).map((c, ci) => (
-        <div className="subrow" key={'c' + ci}>
-          <span className="subn">{t('Burst {0}', ci + 1)}</span>
-          {miniStepper(c.r, 1, false, v => setClusterField(i, ci, v, side))}
-          <span className="dim small">{c.restSec}s</span>
-          <button className="iconbtn" aria-label={t('Remove burst')} onClick={() => removeCluster(i, ci)}><Icon name="xmark" /></button>
-        </div>
-      ))}
-    </>
-  }
-  // A smaller stepper for a drop's weight/reps or a burst's reps — editing what the plan (or a
-  // live "+ Drop"/"+ Burst" tap) already put on the row, not typing into a fresh field.
-  const miniStepper = (value, step, dec, onChange, snapWeightStep = false) => (
-    <div className="stp mini">
-      <button aria-label="Decrease" onClick={() => onChange(snapWeightStep ? stepWeight(value, step, -1) : Math.max(0, Math.round(((value || 0) - step) * 100) / 100))}><Icon name="minus" /></button>
-      <span className="val"><NumberField decimal={dec} value={value ?? ''} onChange={onChange} /></span>
-      <button aria-label="Increase" onClick={() => onChange(snapWeightStep ? stepWeight(value, step, 1) : Math.max(0, Math.round(((value || 0) + step) * 100) / 100))}><Icon name="plus" /></button>
+  if (entry.skipped) return <>
+    <div style={{ opacity: 0.4, textAlign: 'center', padding: '18px 0' }}>
+      <div style={{ fontSize: 17, fontWeight: 600, textTransform: 'capitalize', textDecoration: 'line-through' }}>{exerciseNameFor(ex)}</div>
+      <div className="dim small" style={{ marginTop: 4 }}>{t('Skipped')}</div>
+      <Button size="sm" variant="ghost" style={{ marginTop: 8 }} onClick={skipExercise}>{t('Unskip')}</Button>
     </div>
-  )
+  </>
+
   return <>
     {!dense && <Media ex={ex} key={entry.id} compact={compact} minimizable />}
     <div className="row between" style={{ marginBottom: 6 }}>
       <div style={{ fontSize: (compact || dense) ? 17 : 20, fontWeight: 600, letterSpacing: '-.02em', textTransform: 'capitalize', lineHeight: 1.2 }}>{exerciseNameFor(ex)}</div>
       <div className="row" style={{ gap: 2, flex: 'none' }}>
+        <button className="iconbtn" aria-label={t('Skip')} title={t('Skip exercise')} style={{ color: 'var(--grey)' }}
+          onClick={skipExercise}><Icon name="xmark" /></button>
         {entry.note && <button className="iconbtn" aria-label={t('Note')} title={t('Note')} style={{ color: 'var(--acc)' }}
           onClick={() => exerciseNoteSheet(entryIdx)}><Icon name="pencil" /></button>}
         <button className="iconbtn" aria-label={t('More')} title={t('More')} onClick={openMore}><Icon name="more" /></button>
@@ -437,9 +377,7 @@ function ExerciseBlock({ entryIdx, compact, dense, onToggle, onToggleSide, onFie
               <button type="button" className="n" aria-label={t('Set {0}', phaseNum)} title={t('More')} onClick={() => openSetMenu(s, i)}>{phaseNum}</button>
               <div className="side-rows">
                 {sideRow(s, i, 'L', col1, col2, col3)}
-                {sideExtras(s, i, 'L')}
                 {sideRow(s, i, 'R', col1, col2, col3)}
-                {sideExtras(s, i, 'R')}
               </div>
             </div>
           ) : (
@@ -455,39 +393,13 @@ function ExerciseBlock({ entryIdx, compact, dense, onToggle, onToggleSide, onFie
             <Check checked={s.done} onChange={() => onToggle(i)} />
           </div>
           )}
-          {/* Drop-sets and rest-pause bursts extend this same row — no long rest, no new set.
-              A planned exercise arrives with these already filled in (applyIntensifierPlan);
-              every value here is just as editable as the main row's own weight/reps. */}
-          {!warm && mode === 'reps' && <>
-            {dropsOf(s).map((d, di) => (
-              <div className="subrow" key={'d' + di}>
-                <span className="subn">{t('Drop {0}', di + 1)}</span>
-                {miniStepper(d.w, loadStep, true, v => setDropField(i, di, 'w', v), true)}
-                {miniStepper(d.r, 1, false, v => setDropField(i, di, 'r', v))}
-                <button className="iconbtn" aria-label={t('Remove drop')} onClick={() => removeDrop(i, di)}><Icon name="xmark" /></button>
-              </div>
-            ))}
-            {clustersOf(s).map((c, ci) => (
-              <div className="subrow" key={'c' + ci}>
-                <span className="subn">{t('Burst {0}', ci + 1)}</span>
-                {miniStepper(c.r, 1, false, v => setClusterField(i, ci, v))}
-                <span className="dim small">{c.restSec}s</span>
-                <button className="iconbtn" aria-label={t('Remove burst')} onClick={() => removeCluster(i, ci)}><Icon name="xmark" /></button>
-              </div>
-            ))}
-            {wc.setShortcuts && <div className="setextra">
-              {!isRestPauseSet(s) && <button className="chip add" onClick={() => addDropRow(i)}><Icon name="arrowDown" />{t('+ Drop')}</button>}
-              {!isDropSet(s) && <button className="chip add" onClick={() => addBurstRow(i)}><Icon name="bolt" />{t('+ Burst')}</button>}
-            </div>}
-          </>}
         </div>
       })}
       <div style={{ height: 8 }} />
-      {wc.setShortcuts ? <div className="row" style={{ flexWrap: 'wrap' }}>
-        <Button size="sm" icon="flame" onClick={onAddWarmup}>{t('Add warm-up set')}</Button>
+      <div className="row" style={{ flexWrap: 'wrap' }}>
         <Button size="sm" icon="minus" disabled={entry.sets.length <= 1} onClick={onRemoveSet}>{t('Remove set')}</Button>
         <Button size="sm" icon="plus" onClick={onAddSet}>{t('Add set')}</Button>
-      </div> : <Button size="sm" icon="plus" onClick={onAddSet}>{t('Add set')}</Button>}
+      </div>
     </div>
   </>
 }
@@ -655,10 +567,6 @@ function ActiveWorkout() {
     }
   })
   const removeSet = idx => mutEntry(idx, e => { if (e.sets.length > 1) e.sets.pop() })
-  const addWarmup = idx => mutEntry(idx, e => {
-    const m = modeOf({ ...(e.target || {}), id: e.id })
-    e.sets = insertWarmupRow(e.sets, m, e.target || {}, defaultIncrement(e.id, S.unit))
-  })
   const removeSetAt = (idx, i) => mutEntry(idx, e => { e.sets = removeRowAt(e.sets, i) })
   const pairAt = (first, second) => update(s => {
     s.active.entries = pairAdjacent(s.active.entries, first, second)
@@ -705,7 +613,6 @@ function ActiveWorkout() {
     onField: (i, f, v) => setField(idx, i, f, v),
     onAddSet: () => addSet(idx),
     onRemoveSet: () => removeSet(idx),
-    onAddWarmup: () => addWarmup(idx),
     onRemoveSetAt: i => removeSetAt(idx, i),
     onStartTimed: i => startTimed(idx, i),
     onProgressionSettings: () => openProgressionSettings(idx),
