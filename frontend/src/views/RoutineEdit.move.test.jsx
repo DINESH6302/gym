@@ -106,7 +106,7 @@ describe('routine move controls', () => {
       entry('c1', 10, 'g'),
       entry('c2', 20, 'g')
     ])
-    expect(JSON.parse(localStorage.getItem('gym_state_v1')).routines[0].ex).toEqual(moved)
+    expect(useStore.getState().S.routines[0].ex).toEqual(moved)
   })
 
   it('moves the selected duplicate occurrence without aliasing its configuration', () => {

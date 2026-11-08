@@ -196,8 +196,8 @@ function WeightInput({ value, setValue, unit }) {
   </>
 }
 
-/* ============================ body weight ============================ */
-function BwSheet({ required, onDone, close }) {
+/* ============================ body weight log ============================ */
+function BwSheet({ close }) {
   const st = useStore(s => s.S)
   const unit = st.unit
   const bw = lastBW(st)
@@ -212,33 +212,18 @@ function BwSheet({ required, onDone, close }) {
       s.bodyweight.sort((a, b) => (a.d < b.d ? -1 : 1))
     })
     close()
-    if (onDone) onDone(n); else toast(t('Weight saved'))
+    toast(t('Weight saved'))
   }
   const recent = [...st.bodyweight].reverse().slice(0, 3)
   const delEntry = d => update(s => { s.bodyweight = s.bodyweight.filter(b => b.d !== d) })
   return <>
-    {/* This sheet opens `locked` — swipe/backdrop/Escape/Android-back all no-op on it (see
-        Modals.jsx) so an accidental tap on "Start" can't be walked back by reflex the way
-        every other sheet in the app can. The two buttons below already cover leaving it
-        deliberately; this is the same close a normal sheet gets everywhere else, just
-        opted back in explicitly instead of by omission. Plain close() — no onDone, no
-        nav — so it's a true no-op: the screen underneath is exactly where you left it. */}
-    {required
-      ? <div className="row between" style={{ marginBottom: 14 }}>
-          <h3 style={{ marginBottom: 0 }}>{t('Quick check-in')}</h3>
-          <button className="iconbtn" aria-label={t('Cancel')} onClick={() => close()}><Icon name="xmark" /></button>
-        </div>
-      : <h3>{t('Log body weight')}</h3>}
-    <div className="muted small">{required ? t('Slide or tap to set your weight — tracked before every workout so your curve stays honest.') : t('Today') + ', ' + fmtDate(todayISO(), true)}</div>
+    <h3>{t('Log body weight')}</h3>
+    <div className="muted small">{t('Today') + ', ' + fmtDate(todayISO(), true)}</div>
     <WeightInput value={v} setValue={setV} unit={unit} />
     <div style={{ height: 14 }} />
-    <Button variant="primary" onClick={save}>{required ? t('Save & start workout') : t('Save')}</Button>
-    {required && <>
-      <div style={{ height: 8 }} /><Button variant="ghost" className="dim" onClick={() => { close(); onDone && onDone(null) }}>{t('Start without weighing in')}</Button>
-      <div style={{ height: 2 }} /><Button variant="ghost" className="dim" icon="reset" onClick={() => { close(); nav('/workout') }}>{t('Choose a different workout')}</Button>
-    </>}
-    {!required && recent.length > 0 && <>
-      <h4 className="sec">{t('Recent weigh-ins')}</h4>
+    <Button variant="primary" onClick={save}>{t('Save')}</Button>
+    {recent.length > 0 && <>
+      <h4 className="sec">{t('Recent entries')}</h4>
       <div className="list" style={{ gap: 0 }}>
         {recent.map(b => <div key={b.d} className="row between" style={{ padding: '9px 2px', borderBottom: '1px solid var(--sep)' }}>
           <span className="small muted">{fmtDate(b.d, true)}</span>
@@ -249,9 +234,8 @@ function BwSheet({ required, onDone, close }) {
     </>}
   </>
 }
-export function bwSheet(opts = {}) {
-  const h = ui().openSheet(close => <BwSheet {...opts} close={close} />, { locked: !!opts.required })
-  return h
+export function bwSheet() {
+  ui().openSheet(close => <BwSheet close={close} />)
 }
 
 /* ============================ import from another app ============================ */
@@ -1802,10 +1786,7 @@ export function WorkoutRow({ w, onClick }) {
 // `routineIds` accepts `string | string[] | null` — `[r.id]` for one routine,
 // `effectiveRoutineIds(...)` for today's planned session, `[]` / null for explicit freestyle.
 export function startFlow(routineIds) {
-  // The weigh-in is a setting (Settings → During a workout, issue #137): off goes straight
-  // into the session with no body weight on it, same as "Start without weighing in".
-  if (S().weighIn === false) { beginWorkout(routineIds, null); return }
-  bwSheet({ required: true, onDone: bw => beginWorkout(routineIds, bw) })
+  beginWorkout(routineIds, null)
 }
 export function beginWorkout(routineIds, bw) {
   const st = S()

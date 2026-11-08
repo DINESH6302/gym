@@ -16,7 +16,6 @@ export const DEF = {
   reminder: { on: false, time: '08:00', tz: null }, effort: null,
   equipProfiles: [], activeEquipId: null, equipFilterOn: false,
   exNotes: {}, favEx: [], weekStart: 1, wdec: 1, barWeights: {},
-  weighIn: true,
 }
 const clone = o => JSON.parse(JSON.stringify(o))
 const hasData = st => !!((st.workouts || []).length || (st.routines || []).length || (st.bodyweight || []).length)
@@ -42,7 +41,7 @@ export const useStore = create((set, get) => {
       // Auto-persist changes to backend
       if (push && get().user) {
         // Settings
-        const settingsFields = ['unit', 'sound', 'soundOnSilent', 'keepAwake', 'lang', 'theme', 'accent', 'body', 'targetW', 'gifSize', 'workoutView', 'effort', 'weighIn', 'weekStart', 'wdec', 'equipFilterOn', 'activeEquipId', 'wc', 'reminder']
+        const settingsFields = ['unit', 'sound', 'soundOnSilent', 'keepAwake', 'lang', 'theme', 'accent', 'body', 'targetW', 'gifSize', 'workoutView', 'effort', 'weekStart', 'wdec', 'equipFilterOn', 'activeEquipId', 'wc', 'reminder']
         const patch = {}
         for (const f of settingsFields) {
           if (JSON.stringify(S[f]) !== JSON.stringify(before[f])) patch[f] = S[f]
@@ -325,7 +324,6 @@ export const useStore = create((set, get) => {
           gifSize: settings.gifSize || DEF.gifSize,
           workoutView: settings.workoutView || DEF.workoutView,
           effort: settings.effort ?? DEF.effort,
-          weighIn: settings.weighIn ?? DEF.weighIn,
           weekStart: settings.weekStart ?? DEF.weekStart,
           wdec: settings.weightDecimals ?? DEF.wdec,
           equipFilterOn: !!settings.equipFilterOn,

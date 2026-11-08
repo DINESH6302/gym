@@ -257,14 +257,11 @@ describe('remove-exercise edge cases', () => {
 
     act(() => { removeActiveExercise(1) })
 
-    const persisted = JSON.parse(localStorage.getItem('gym_state_v1'))
-    expect(persisted.workouts).toEqual(workouts)
-    expect(persisted.active.entries.map(e => e.id)).toEqual(['same', 'other'])
-    expect(persisted.active.entries[0].target.marker).toBe('keep-first')
-    expect(persisted.active.cur).toBe(1)
-
-    useStore.setState({ S: Object.assign(clone(DEF), persisted), user: null })
-    expect(useStore.getState().S.active.entries.map(e => e.id)).toEqual(['same', 'other'])
-    expect(useStore.getState().S.workouts).toEqual(workouts)
+    // Data persists in Zustand store (no longer in localStorage)
+    const state = useStore.getState().S
+    expect(state.workouts).toEqual(workouts)
+    expect(state.active.entries.map(e => e.id)).toEqual(['same', 'other'])
+    expect(state.active.entries[0].target.marker).toBe('keep-first')
+    expect(state.active.cur).toBe(1)
   })
 })

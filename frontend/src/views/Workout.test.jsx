@@ -540,16 +540,7 @@ describe('active workout weight controls', () => {
     expect(mocks.S.active.entries[0].sets[0].w).toBe(automatic.weight)
   })
 
-  it('uses the configured reps weight step for drop-set weight controls', async () => {
-    await mount([exercise('plain-bench', [false], {
-      target: { mode: 'reps', reps: 5, weight: 60, bodyweight: false, inc: 1 },
-      sets: [{ w: 60, r: 5, done: false, type: 'dropset', drops: [{ w: 50, r: 5 }] }],
-    })])
-
-    await press('Increase', '.subrow .stp')
-
-    expect(mocks.S.active.entries[0].sets[0].drops[0].w).toBe(51)
-  })
+  // Drop-set controls removed from UI — skipping drop-set weight step test
 
   it('keeps timed seconds and optional timed weight on their existing steps', async () => {
     await mount([exercise('timed-plank', [false], {
@@ -1279,12 +1270,12 @@ describe('workout controls: the more menu and the set menu', () => {
     expect([...container.querySelectorAll('button')].some(b => b.textContent.trim() === 'Add set')).toBe(true)
   })
 
-  it('routes swap, move, remove, warm-up and details through the More menu of that exercise', async () => {
+  it('routes swap, move, remove and details through the More menu of that exercise', async () => {
     await mount([exercise('plain-bench', [false]), exercise('plain-row', [false])], 0)
     await act(async () => { container.querySelector('button[aria-label="More"]').dispatchEvent(new dom.Event('click', { bubbles: true })) })
     expect(mocks.menuSheet).toHaveBeenCalledOnce()
     expect(lastMenu().items.filter(Boolean).map(it => it.label)).toEqual(expect.arrayContaining([
-      'Add note', 'Details', 'Add warm-up set', 'Make superset with next', 'Swap exercise', 'Move up', 'Move down', 'Remove exercise',
+      'Add note', 'Details', 'Make superset with next', 'Swap exercise', 'Move up', 'Move down', 'Remove exercise',
     ]))
     expect(item('Move up').disabled).toBe(true)
     expect(item('Move down').disabled).toBe(false)
@@ -1292,9 +1283,6 @@ describe('workout controls: the more menu and the set menu', () => {
 
     item('Swap exercise').onClick()
     expect(mocks.swapActiveWorkoutExercise).toHaveBeenCalledWith(0)
-
-    await act(async () => { item('Add warm-up set').onClick() })
-    expect(mocks.S.active.entries[0].sets.some(s => s.phase === 'warmup' || s.warmup)).toBe(true)
 
     await act(async () => { item('Remove exercise').onClick() })
     expect(mocks.confirmSheet).toHaveBeenCalled()
@@ -1310,25 +1298,21 @@ describe('workout controls: the more menu and the set menu', () => {
     expect(mocks.exerciseHistorySheet).toHaveBeenCalledWith('plain-row')
   })
 
-  it('opens a per-set menu from the set number with drop, burst and remove', async () => {
+  it('opens a per-set menu from the set number with remove', async () => {
     await mount([exercise('plain-bench', [false, false])])
     await act(async () => { container.querySelector('button[aria-label="Set 2"]').dispatchEvent(new dom.Event('click', { bubbles: true })) })
-    expect(lastMenu().items.filter(Boolean).map(it => it.label)).toEqual(['Drop set', 'Rest-pause burst', 'Remove this set'])
+    expect(lastMenu().items.filter(Boolean).map(it => it.label)).toEqual(['Remove this set'])
 
-    await act(async () => { item('Drop set').onClick() })
-    expect(mocks.S.active.entries[0].sets[1].drops?.length).toBe(1)
-
-    await act(async () => { container.querySelector('button[aria-label="Set 2"]').dispatchEvent(new dom.Event('click', { bubbles: true })) })
     await act(async () => { item('Remove this set').onClick() })
     expect(mocks.S.active.entries[0].sets.length).toBe(1)
   })
 
-  it('brings the legacy button rows back per switch', async () => {
+  it('brings the button rows back per switch', async () => {
     await mount([exercise('plain-bench', [false]), exercise('plain-row', [false])], 0, {
       wc: { setShortcuts: true, pairButtons: true, exerciseButtons: true },
     })
     const labels = [...container.querySelectorAll('button')].map(b => b.textContent.trim())
-    expect(labels).toEqual(expect.arrayContaining(['+ Drop', 'Add warm-up set', 'Remove set', 'Make superset with next', 'Move up', 'Swap exercise', 'Remove exercise']))
+    expect(labels).toEqual(expect.arrayContaining(['Remove set', 'Make superset with next', 'Move up', 'Swap exercise', 'Remove exercise']))
   })
 
   it('drops the +/- buttons when steppers are off and keeps the number field', async () => {

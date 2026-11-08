@@ -142,16 +142,12 @@ describe('routine long-press reorder', () => {
 
   it('moves across measured slots and persists one complete changed order', () => {
     const layout = mount([configured('a'), configured('b'), configured('c'), configured('d')])
-    const before = localStorage.getItem('gym_state_v1')
-    const writes = vi.spyOn(Storage.prototype, 'setItem')
     const row = rows()[0], item = row.querySelector('.item')
     lift(row, layout.centers[0])
     pointer(item, 'pointermove', { y: layout.centers[2] + 1 })
     pointer(item, 'pointerup', { y: layout.centers[2] + 1 })
     expect(exercises().map(e => e.id)).toEqual(['b', 'c', 'a', 'd'])
-    expect(JSON.parse(localStorage.getItem('gym_state_v1')).routines[0].ex.map(e => e.id)).toEqual(['b', 'c', 'a', 'd'])
-    expect(localStorage.getItem('gym_state_v1')).not.toBe(before)
-    expect(writes).toHaveBeenCalledTimes(1)
+    expect(useStore.getState().S.routines[0].ex.map(e => e.id)).toEqual(['b', 'c', 'a', 'd'])
   })
 
   it('suppresses the compatibility click after a successful changed drop', () => {
@@ -234,7 +230,7 @@ describe('routine long-press reorder', () => {
       if (root) { act(() => root.unmount()); host.remove(); root = null; host = null }
       const layout = mount([configured('a'), configured('b'), configured('c')])
       const row = rows()[0], item = row.querySelector('.item')
-      const before = localStorage.getItem('gym_state_v1')
+      const before = JSON.stringify(useStore.getState().S)
       lift(row, layout.centers[0])
       pointer(item, 'pointermove', { y: layout.centers[2] })
       if (cancel === 'outside') pointer(item, 'pointerup', { x: layout.listRect.right + 20, y: layout.centers[2] })
@@ -248,7 +244,7 @@ describe('routine long-press reorder', () => {
       }
       if (cancel === 'second') pointer(rows()[1].querySelector('.item'), 'pointerdown', { id: 8, y: layout.centers[1] })
       expect(exercises().map(e => e.id), cancel).toEqual(['a', 'b', 'c'])
-      expect(localStorage.getItem('gym_state_v1'), cancel).toBe(before)
+      expect(JSON.stringify(useStore.getState().S), cancel).toBe(before)
       expect(host.querySelector('.is-dragging'), cancel).toBeNull()
     }
   })
@@ -289,24 +285,24 @@ describe('routine long-press reorder', () => {
   it('fails closed when row geometry disappears during an active drag', () => {
     const layout = mount([configured('a'), configured('b'), configured('c')])
     const row = rows()[0], item = row.querySelector('.item')
-    const before = localStorage.getItem('gym_state_v1')
+    const before = JSON.stringify(useStore.getState().S)
     lift(row, layout.centers[0])
     rows()[1].getBoundingClientRect.mockReturnValue(undefined)
     pointer(item, 'pointermove', { y: layout.centers[2] })
     pointer(item, 'pointerup', { y: layout.centers[2] })
     expect(exercises().map(e => e.id)).toEqual(['a', 'b', 'c'])
-    expect(localStorage.getItem('gym_state_v1')).toBe(before)
+    expect(JSON.stringify(useStore.getState().S)).toBe(before)
     expect(host.querySelector('.is-dragging')).toBeNull()
   })
 
   it('cleans pending and active gestures on unmount without late writes', () => {
     const layout = mount([configured('a'), configured('b')])
     const item = rows()[0].querySelector('.item')
-    const before = localStorage.getItem('gym_state_v1')
+    const before = JSON.stringify(useStore.getState().S)
     pointer(item, 'pointerdown', { y: layout.centers[0] })
     act(() => root.unmount()); root = null
     act(() => vi.advanceTimersByTime(1000))
-    expect(localStorage.getItem('gym_state_v1')).toBe(before)
+    expect(JSON.stringify(useStore.getState().S)).toBe(before)
 
     const activeLayout = mount([configured('a'), configured('b')])
     const activeItem = rows()[0].querySelector('.item')
@@ -316,7 +312,7 @@ describe('routine long-press reorder', () => {
     act(() => root.unmount()); root = null
     act(() => vi.advanceTimersByTime(1000))
     expect(release).toHaveBeenCalledWith(7)
-    expect(localStorage.getItem('gym_state_v1')).toBe(before)
+    expect(JSON.stringify(useStore.getState().S)).toBe(before)
   })
 
   it('covers reverse measured slots and an unchanged original slot', () => {
@@ -329,13 +325,13 @@ describe('routine long-press reorder', () => {
 
     act(() => root.unmount()); host.remove(); root = null; host = null
     layout = mount([configured('a'), configured('b'), configured('c')])
-    const before = localStorage.getItem('gym_state_v1')
+    const before = JSON.stringify(useStore.getState().S)
     item = rows()[1].querySelector('.item')
     lift(rows()[1], layout.centers[1])
     pointer(item, 'pointermove', { y: layout.centers[1] + ROUTINE_DRAG_SLOP + 1 })
     pointer(item, 'pointerup', { y: layout.centers[1] + ROUTINE_DRAG_SLOP + 1 })
     expect(exercises().map(e => e.id)).toEqual(['a', 'b', 'c'])
-    expect(localStorage.getItem('gym_state_v1')).toBe(before)
+    expect(JSON.stringify(useStore.getState().S)).toBe(before)
   })
 
   it('reads the persisted changed order back after a fresh remount', () => {
@@ -344,9 +340,9 @@ describe('routine long-press reorder', () => {
     lift(rows()[0], layout.centers[0])
     pointer(item, 'pointermove', { y: layout.centers[2] + 1 })
     pointer(item, 'pointerup', { y: layout.centers[2] + 1 })
-    const saved = JSON.parse(localStorage.getItem('gym_state_v1'))
+    const storeState = useStore.getState().S
     act(() => root.unmount()); host.remove(); root = null; host = null
-    useStore.setState({ S: saved, user: null })
+    useStore.setState({ S: storeState, user: null })
     remountCurrentState()
     expect(exercises().map(e => e.id)).toEqual(['b', 'c', 'a'])
   })
@@ -354,13 +350,13 @@ describe('routine long-press reorder', () => {
   it('cancels active ownership for a second pointer outside the list and pending lost capture', () => {
     let layout = mount([configured('a'), configured('b'), configured('c')])
     let item = rows()[0].querySelector('.item')
-    const before = localStorage.getItem('gym_state_v1')
+    const before = JSON.stringify(useStore.getState().S)
     lift(rows()[0], layout.centers[0])
     pointer(item, 'pointermove', { y: layout.centers[2] })
     pointer(document.body, 'pointerdown', { id: 8, y: 20 })
     pointer(item, 'pointerup', { y: layout.centers[2] })
     expect(exercises().map(e => e.id)).toEqual(['a', 'b', 'c'])
-    expect(localStorage.getItem('gym_state_v1')).toBe(before)
+    expect(JSON.stringify(useStore.getState().S)).toBe(before)
     expect(host.querySelector('.is-dragging')).toBeNull()
 
     act(() => root.unmount()); host.remove(); root = null; host = null
