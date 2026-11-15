@@ -1,0 +1,16 @@
+[Unit]
+Description=openGym Spring Boot Backend
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/openGym/backend
+ExecStart=/usr/bin/mvn spring-boot:run
+Restart=always
+RestartSec=5
+Environment=NO_PROXY=*
+Environment=no_proxy=*
+
+[Install]
+WantedBy=multi-user.target

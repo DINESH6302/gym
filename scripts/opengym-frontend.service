@@ -1,0 +1,14 @@
+[Unit]
+Description=openGym Vite Frontend
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/openGym/frontend
+ExecStart=/home/ubuntu/.local/bin/bun run vite --host 0.0.0.0
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
