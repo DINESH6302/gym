@@ -1,0 +1,208 @@
+================================================================================
+ openGym — Command Reference
+================================================================================
+
+── LOCAL DEVELOPMENT ──────────────────────────────────────────────────────────
+
+# Start both (from project root)
+./start.sh
+
+# Start individually
+cd backend && no_proxy='*' NO_PROXY='*' http_proxy='' https_proxy='' mvn spring-boot:run
+cd frontend && ~/.local/bin/bun run vite
+
+# Frontend URL:  http://localhost:5173
+# Backend URL:   http://localhost:3000
+
+# Run tests
+cd frontend && ~/.local/bin/bun run test           # all tests
+cd frontend && ~/.local/bin/bun run test:watch      # watch mode
+cd frontend && ~/.local/bin/bun run vitest run src/e2e/   # E2E only
+
+# Build frontend for production
+cd frontend && ~/.local/bin/bun run build
+
+
+── ORACLE CLOUD VM — SERVICE MANAGEMENT ───────────────────────────────────────
+
+# SSH into VM
+ssh -i <path-to-private-key> ubuntu@<vm-public-ip>
+
+# Start services
+sudo systemctl start opengym-backend opengym-frontend
+
+# Stop services
+sudo systemctl stop opengym-backend opengym-frontend
+
+# Restart services
+sudo systemctl restart opengym-backend opengym-frontend
+
+# Check status
+sudo systemctl status opengym-backend opengym-frontend
+
+# Enable auto-start on reboot
+sudo systemctl enable opengym-backend opengym-frontend
+
+# Disable auto-start on reboot
+sudo systemctl disable opengym-backend opengym-frontend
+
+
+── LOGS ───────────────────────────────────────────────────────────────────────
+
+# Follow backend logs (live)
+sudo journalctl -u opengym-backend -f
+
+# Follow frontend logs (live)
+sudo journalctl -u opengym-frontend -f
+
+# Last 50 lines of backend logs
+sudo journalctl -u opengym-backend -n 50 --no-pager
+
+# Last 50 lines of frontend logs
+sudo journalctl -u opengym-frontend -n 50 --no-pager
+
+# Logs since last boot
+sudo journalctl -u opengym-backend -b
+
+# Logs from today only
+sudo journalctl -u opengym-backend --since today
+
+# Logs between timestamps
+sudo journalctl -u opengym-backend --since "2026-11-15 18:00" --until "2026-11-15 19:00"
+
+# All errors only
+sudo journalctl -u opengym-backend -p err
+
+
+── DATABASE (SQLite) ──────────────────────────────────────────────────────────
+
+# DB location
+#   Local:  backend/data/opengym.db
+#   VM:     /home/ubuntu/opengym/gym/backend/data/opengym.db
+
+# Reset database (deletes all data — schema auto-recreates on boot)
+sudo systemctl stop opengym-backend
+rm -f /home/ubuntu/opengym/gym/backend/data/opengym.db
+sudo systemctl start opengym-backend
+
+# Open database CLI
+sqlite3 /home/ubuntu/opengym/gym/backend/data/opengym.db
+
+# Common SQLite queries
+sqlite3 backend/data/opengym.db "SELECT * FROM users;"
+sqlite3 backend/data/opengym.db "SELECT * FROM user_settings;"
+sqlite3 backend/data/opengym.db "SELECT * FROM routines;"
+sqlite3 backend/data/opengym.db "SELECT * FROM routine_exercises;"
+sqlite3 backend/data/opengym.db "SELECT * FROM workouts;"
+sqlite3 backend/data/opengym.db "SELECT * FROM workout_entries;"
+sqlite3 backend/data/opengym.db "SELECT * FROM workout_sets;"
+sqlite3 backend/data/opengym.db "SELECT * FROM bodyweight_entries;"
+sqlite3 backend/data/opengym.db "SELECT * FROM week_schedule;"
+sqlite3 backend/data/opengym.db "SELECT * FROM exercise_weights;"
+sqlite3 backend/data/opengym.db "SELECT * FROM favourite_exercises;"
+sqlite3 backend/data/opengym.db "SELECT * FROM bar_weights;"
+sqlite3 backend/data/opengym.db "SELECT * FROM custom_exercises;"
+sqlite3 backend/data/opengym.db "SELECT * FROM equipment_profiles;"
+
+# List all tables
+sqlite3 backend/data/opengym.db ".tables"
+
+# Show table schema
+sqlite3 backend/data/opengym.db ".schema workouts"
+
+# Count rows
+sqlite3 backend/data/opengym.db "SELECT COUNT(*) FROM workouts;"
+
+# Backup database
+cp backend/data/opengym.db backend/data/opengym_backup_$(date +%Y%m%d).db
+
+# Restore from backup
+cp backend/data/opengym_backup_20261115.db backend/data/opengym.db
+
+
+── API TESTING (curl) ─────────────────────────────────────────────────────────
+
+# Health check
+curl -s http://localhost:3000/api/health
+
+# Register user
+curl -s http://localhost:3000/api/auth/register \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"Test","email":"test@test.com","password":"test123"}'
+
+# Login (save token)
+TOKEN=$(curl -s http://localhost:3000/api/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"test@test.com","password":"test123"}' | python3 -c "import sys,json; print(json.load(sys.stdin)['token'])")
+
+# Test authenticated endpoints
+curl -s http://localhost:3000/api/me -H "Authorization: Bearer $TOKEN"
+curl -s http://localhost:3000/api/settings -H "Authorization: Bearer $TOKEN"
+curl -s http://localhost:3000/api/routines -H "Authorization: Bearer $TOKEN"
+curl -s http://localhost:3000/api/workouts?limit=10 -H "Authorization: Bearer $TOKEN"
+curl -s http://localhost:3000/api/bodyweight -H "Authorization: Bearer $TOKEN"
+curl -s http://localhost:3000/api/schedule -H "Authorization: Bearer $TOKEN"
+curl -s http://localhost:3000/api/exercise-weights -H "Authorization: Bearer $TOKEN"
+curl -s http://localhost:3000/api/favourites -H "Authorization: Bearer $TOKEN"
+curl -s http://localhost:3000/api/bar-weights -H "Authorization: Bearer $TOKEN"
+curl -s http://localhost:3000/api/custom-exercises -H "Authorization: Bearer $TOKEN"
+
+
+── PORT & PROCESS MANAGEMENT ──────────────────────────────────────────────────
+
+# Check what's running on ports
+lsof -i :3000       # backend
+lsof -i :5173       # frontend
+
+# Kill process on a port
+kill $(lsof -t -i :3000)
+kill $(lsof -t -i :5173)
+
+# Check Java version
+java -version
+
+# Check Maven version
+mvn -version
+
+# Check Bun version
+~/.bun/bin/bun --version        # VM
+~/.local/bin/bun --version      # local Mac
+
+
+── SERVICE FILE LOCATIONS ─────────────────────────────────────────────────────
+
+# systemd service files
+/etc/systemd/system/opengym-backend.service
+/etc/systemd/system/opengym-frontend.service
+
+# Edit a service file
+sudo nano /etc/systemd/system/opengym-backend.service
+sudo systemctl daemon-reload    # required after editing
+
+# Project paths
+#   Local Mac:  /Users/d0s15zh/repos/openGym/
+#   Oracle VM:  /home/ubuntu/opengym/gym/
+
+
+── TROUBLESHOOTING ────────────────────────────────────────────────────────────
+
+# Backend won't start — check logs
+sudo journalctl -u opengym-backend -n 50 --no-pager
+
+# Frontend won't start — check logs
+sudo journalctl -u opengym-frontend -n 50 --no-pager
+
+# Check disk space
+df -h
+
+# Check memory
+free -h
+
+# Check if DB file exists
+ls -la backend/data/opengym.db
+
+# Check if data directory exists (create if missing)
+mkdir -p backend/data
+
+# VM firewall — ensure ports are open
+sudo iptables -L -n | grep -E '3000|5173'
