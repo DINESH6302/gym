@@ -117,7 +117,15 @@ function Shell() {
     return () => window.cancelAnimationFrame(frame)
   }, [loc.pathname, navType])
   // bound to the workout, not to the route — checking Stats mid-session keeps the screen on
-  useWakeLock(!!S.active && S.keepAwake !== false)
+  useWakeLock(!!S.active && !!S.keepAwake)
+  // If an active session was restored from localStorage (crash guard), navigate back to it
+  const restoredRef = useRef(false)
+  useEffect(() => {
+    if (ready && S.active && !restoredRef.current && loc.pathname !== '/workout') {
+      restoredRef.current = true
+      navigate('/workout', { replace: true })
+    }
+  }, [ready, !!S.active])
 
   const authed = !!user
   if (!ready && !authed) return (

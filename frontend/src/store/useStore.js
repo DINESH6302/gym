@@ -20,6 +20,32 @@ export const DEF = {
 const clone = o => JSON.parse(JSON.stringify(o))
 const hasData = st => !!((st.workouts || []).length || (st.routines || []).length || (st.bodyweight || []).length)
 
+// ── Active-workout crash guard ──────────────────────────────────────────────
+// Mobile browsers kill backgrounded tabs aggressively. Persist the in-progress
+// workout to localStorage so it survives tab kills / page reloads.
+const ACTIVE_KEY = 'gym_active_session'
+const MAX_SESSION_AGE = 24 * 60 * 60 * 1000 // 24 h — stale guard
+
+function persistActive(active) {
+  try {
+    if (active) localStorage.setItem(ACTIVE_KEY, JSON.stringify(active))
+    else localStorage.removeItem(ACTIVE_KEY)
+  } catch { /* storage full or private mode */ }
+}
+
+function restoreActive() {
+  try {
+    const raw = localStorage.getItem(ACTIVE_KEY)
+    if (!raw) return null
+    const session = JSON.parse(raw)
+    if (session.start && Date.now() - session.start > MAX_SESSION_AGE) {
+      localStorage.removeItem(ACTIVE_KEY)
+      return null
+    }
+    return session
+  } catch { return null }
+}
+
 export const useStore = create((set, get) => {
   return {
     S: clone(DEF),
@@ -37,6 +63,9 @@ export const useStore = create((set, get) => {
       mut(S)
       registerCustom(S.customEx)
       set({ S })
+
+      // Persist active workout so it survives mobile tab kills
+      if (JSON.stringify(S.active) !== JSON.stringify(before.active)) persistActive(S.active)
 
       // Auto-persist changes to backend
       if (push && get().user) {
@@ -154,6 +183,7 @@ export const useStore = create((set, get) => {
       const S = clone(get().S)
       S.workouts.push(workout)
       S.active = null
+      persistActive(null)
       set({ S })
       try { await AC.saveWorkout(workout) } catch (e) { console.warn('workout save failed:', e) }
     },
@@ -351,7 +381,7 @@ export const useStore = create((set, get) => {
           barWeights: barWeights || {},
           equipProfiles: Array.isArray(equipProfiles) ? equipProfiles : [],
           customEx: Array.isArray(customEx) ? customEx : [],
-          active: null,
+          active: restoreActive(),
         }
 
         registerCustom(S.customEx)
